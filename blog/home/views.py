@@ -4,34 +4,158 @@ from .serializers import Blogserializer
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from .models import Blog
+from django.db.models import Q
+from django.core.paginator import Paginator
+
+class PublicView(APIView):
+    def get(self, request):
+        try:
+                blogs = Blog.objects.all().order_by("created_at")
+
+                if request.GET.get('search'):
+                    search = request.GET.get('search')
+                    blogs = blogs.filter(Q(title__icontains=search) | Q(
+                        blog_text__icontains=search))
+                
+                page_number = request.GET.get('page', 1)
+                paginator = Paginator(blogs, 2)
+
+                serializer = Blogserializer(paginator.page(page_number), many=True)
+
+                return Response({
+                    'data': serializer.data,
+                    'message': 'Blog fetched successfully'
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(e)
+            return Response({
+                'data': {'this is'},
+                'message': 'Something went wrong'
+            })
 
 
 class BlogView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
+    def get(self, request):
+        try:
+            blogs = Blog.objects.filter(user=request.user)
+
+            if request.GET.get('search'):
+                search = request.GET.get('search')
+                blogs = blogs.filter(Q(title__icontains=search) | Q(
+                    blog_text__icontains=search))
+
+            serializer = Blogserializer(blogs, many=True)
+
+            return Response({
+                'data': serializer.data,
+                'message': 'Blog fetched successfully'
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(e)
+            return Response({
+                'data': {'this is'},
+                'message': 'Something went wrong'
+            })
+
     def post(self, request):
         try:
             data = request.data
             data['user'] = request.user.id
-            serializer = Blogserializer(data= data)
+            serializer = Blogserializer(data=data)
 
             if not serializer.is_valid():
                 return Response({
                     'data': serializer.errors,
                     'message': 'something went wrong'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
+
             serializer.save()
-            
+
             return Response({
                 'data': serializer.data,
                 'message': 'Your Blog is created'
             }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            print(e)
+            return Response({
+                'data': {'this is'},
+                'message': 'Something went wrong'
+            })
+
+    def patch(self, request):
+        try:
+            data = request.data
+            blog = Blog.objects.filter(uid=data.get('uid'))
+
+            if not blog.exists():
+                return Response({
+                    'data': {},
+                    'message': 'invalid blog uid'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.user != blog[0].user:
+                return Response({
+                    'data': {},
+                    'message': 'you are not authorise to this'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = Blogserializer(blog[0],data=data, partial=True)
+
+            if not serializer.is_valid():
+                return Response({
+                    'data': serializer.errors,
+                    'message': 'something went wrong'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                'data': serializer.data,
+                'message': "updated blog successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(e)
+            return Response({
+                'data': {'this is'},
+                'message': 'Something went wrong'
+            })
+        
+    def delete(self, request):
+        try:
+            data = request.data
+            blog = Blog.objects.filter(uid = data.get('uid'))
+            
+            if not blog.exists():
+                return Response({
+                    'data': {},
+                    'message': 'invalid blog uid'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if request.user != blog[0].user:
+                return Response({
+                    'data': {},
+                    'message': 'you are not authorise to this'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            blog[0].delete()
+            
+            return Response({
+                'data': {},
+                'message': "blog deleted successfully"
+            }, status=status.HTTP_200_OK)
         
         except Exception as e:
             print(e)
             return Response({
-                'data': {},
+                'data': {'this is'},
                 'message': 'Something went wrong'
             })
+
